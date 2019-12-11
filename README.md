@@ -1,17 +1,10 @@
+
 # Deep Structured Similarity Matching
 
-### How to run it?
-Example Usage:
-```
-python runscript.py --tanh_factors 1 --distance_parameter 4  --stride 2 --gamma_factor 0 --mult_factor 1 --NpSs 4
-```
+## Overview
 
-Please use `python runscript.py -h` to get info on what those parameters are.
+This repository is based off of the code from the Pehlevan group: https://github.com/Pehlevan-Group/Deep_Structured_SM. Thanks for the open sourced code from your paper.
 
-### File Structure
-```bash
-├── mnist_data.py                       # fetch mnist data
-├── runscript.py                        # run experiments
-├── snn_multipleneurons_fast.py         # define deep structued sm class
-└── README.md                           
-```
+In this project, I take their work further by doing some more experimentation. I also modified (fixed) the convergence criterion for the neural dynamics simulation. I also vectorized the neural dynamics so multiple inputs can be run concurrently. This leads to great speedups when fitting a linear classifier since one doesn't have to iterate through each image in MNIST. 
+
+To see a description of my results, check out the PDF in the repo. TODO
