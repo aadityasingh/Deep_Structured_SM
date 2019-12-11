@@ -99,12 +99,13 @@ print('Dimensions: ', network.dimensions)
 np.random.seed(0)
 for i in range(120):
     if i%5 == 0:
-        with open(checkpoint_dir + '/network_g_val{0}_m{1}_g{2}_r{3}_NpS{4}_full--iter{5}.pkl'.format(tanh_factors, mult_factor, gamma_factor, distance_parameter, NpSs, i), 'wb') as output:
-            pickle.dump(network, output, pickle.HIGHEST_PROTOCOL)
         with open(args.run_name + '/update_distr.pkl', 'wb') as f:
             pickle.dump(network.update_distr, f)
         with open(args.run_name + '/deltas.pkl', 'wb') as f:
             pickle.dump(network.max_deltas, f)
+    if i%30 == 0:
+        with open(checkpoint_dir + '/network_g_val{0}_m{1}_g{2}_r{3}_NpS{4}_full--iter{5}.pkl'.format(tanh_factors, mult_factor, gamma_factor, distance_parameter, NpSs, i), 'wb') as output:
+            pickle.dump(network, output, pickle.HIGHEST_PROTOCOL)
     indices = np.arange(0, x_train.shape[0])
     rand_indices = np.random.choice(indices, size=1000)
     # print(rand_indices)
@@ -118,7 +119,7 @@ for i in range(120):
         # train_representations = np.zeros((x_train.shape[0], np.sum(network.dimensions)))
         print("Train reps")
         tic = time.time()
-        train_representations, _ = network.neural_dynamics(x_train, max_iters=args.max_iters, threshold=args.threshold, bleed=(args.bleed==1), verbose=True)
+        train_representations, _ = network.neural_dynamics(x_train, max_iters=args.max_iters, threshold=args.threshold, verbose=True)
         print("Parallelized network sim took:", time.time()-tic)
         train_representations = train_representations.T
         np.save(rep_dir+'/train_representations_g_val{0}_m{1}_g{2}_r{3}_NpS{4}--iter{5}.npy'.format(tanh_factors, mult_factor, gamma_factor, distance_parameter, NpSs, i+1), train_representations)
@@ -130,7 +131,7 @@ for i in range(120):
             # print(np.linalg.norm(train_representations[i] - train_representations[i]))
         print("Train reps")
         tic = time.time()
-        test_representations, _ = network.neural_dynamics(x_test, max_iters=args.max_iters, threshold=args.threshold, bleed=(args.bleed==1), verbose=True)
+        test_representations, _ = network.neural_dynamics(x_test, max_iters=args.max_iters, threshold=args.threshold, verbose=True)
         print("Parallelized network sim took:", time.time()-tic)
         test_representations = test_representations.T
         np.save(rep_dir+'/test_representations_g_val{0}_m{1}_g{2}_r{3}_NpS{4}--iter{5}.npy'.format(tanh_factors, mult_factor, gamma_factor, distance_parameter, NpSs, i+1), test_representations)

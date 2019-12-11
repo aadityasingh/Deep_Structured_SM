@@ -1,3 +1,6 @@
+continuous*/*
+*iter*/*
+*thresh*/*
 __pycache__/*
 .DS_Store
 default*/*

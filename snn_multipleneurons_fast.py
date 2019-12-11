@@ -275,7 +275,7 @@ class deep_network_GPU(object):
         r_vecs = np.zeros((np.sum(self.dimensions), imgs.shape[0]))
         r_vecs[:self.channels*self.image_dim**2] = imgs.T
         if r_init is not None:
-            print("SHOULND'T PRINT THIS")
+            # print("SHOULND'T PRINT THIS")
             r_vecs[self.channels*self.image_dim**2:] = r_init[self.channels*self.image_dim**2:]
         r_vecs = cp.asarray(r_vecs)
         # delta = [cp.inf]*self.layers
@@ -328,6 +328,7 @@ class deep_network_GPU(object):
             img_array = shuffle(images, random_state = epoch)
             epoch_start = time.time()
             sum_ticker = 0
+            rs = np.zeros((np.sum(self.dimensions), batch_size))
             for i in tqdm(range(self.n_images//batch_size)):
                 # print(img_array[i:i+1].shape)
                 last_r = rs if bleed else None
