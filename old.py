@@ -137,12 +137,10 @@ class deep_network_GPU(object):
         self.g_vec = None
         self.mult_vec = None
         self.euler_step = euler_step
-        self.tanh_factors = tanh_factors # UNUSED
+        self.tanh_factors = tanh_factors
         self.mult_factors = mult_factors
         self.W_gpu = None
         deep_network_GPU.create_deep_network(self)
-        self.update_distr = []
-        self.max_deltas = []
         print("Created deep network")
     
     def create_deep_network(self):
@@ -268,82 +266,60 @@ class deep_network_GPU(object):
     def activation_function(self, vec):
         return cp.tanh(vec)
     
-    def neural_dynamics(self, imgs, max_iters=3000, threshold=1e-4, r_init = None, verbose=False):
+    def neural_dynamics(self, img, max_iters=1):
         conversion_ticker = 0
-        # x = imgs
-        u_vecs = cp.asarray(np.zeros((np.sum(self.dimensions), imgs.shape[0])))
-        r_vecs = np.zeros((np.sum(self.dimensions), imgs.shape[0]))
-        r_vecs[:self.channels*self.image_dim**2] = imgs.T
-        if r_init is not None:
-            print("SHOULND'T PRINT THIS")
-            r_vecs[self.channels*self.image_dim**2:] = r_init[self.channels*self.image_dim**2:]
-        r_vecs = cp.asarray(r_vecs)
-        # delta = [cp.inf]*self.layers
-        delta = cp.inf
-        deltas = []
+        x = img.flatten()
+        u_vec = cp.asarray(np.zeros(np.sum(self.dimensions)))
+        r_vec = np.zeros(np.sum(self.dimensions))
+        r_vec[:self.channels*self.image_dim**2] = x
+        r_vec = cp.asarray(r_vec)
+        delta = [cp.inf]*self.layers
         self.W_gpu = csr_gpu(self.deep_matrix_weights*self.deep_matrix_structure + self.deep_matrix_identity)
         # updates = 0
-        for updates in tqdm(iterable=range(max_iters), disable=(not verbose)):
-            if delta < threshold:#all(ele < 1e-4 for ele in delta):
+        for updates in range(max_iters):
+            if all(ele < 1e-4 for ele in delta):
                 conversion_ticker=1
-                if verbose:
-                    print("Iteration converged", updates)
+                # print("Iteration converged", updates)
                 break
             lr = max((self.euler_step/(1+0.005*updates)), 0.05)
             # print(self.W_gpu.shape)
             # print(r_vec.shape)
-            delta_us = -u_vecs + self.W_gpu.dot(r_vecs)
-            u_vecs[self.channels*self.image_dim**2:] += lr*delta_us[self.channels*self.image_dim**2:]
-            r_vecs[self.channels*self.image_dim**2:] = self.activation_function(u_vecs[self.channels*self.image_dim**2:])
+            delta_u = -u_vec + self.W_gpu.dot(r_vec)
+            u_vec[self.channels*self.image_dim**2:] += lr*delta_u[self.channels*self.image_dim**2:]
+            r_vec[self.channels*self.image_dim**2:] = self.activation_function(u_vec[self.channels*self.image_dim**2:])
             # updates += 1
-            # if (updates+1)%min_iters == 0:
-            #     for layer in range(1, self.layers+1):
-            #         start_token_large = np.sum(self.dimensions[:layer])
-            #         end_token_large = np.sum(self.dimensions[:layer+1])
-            #         start_token_small = int(np.sum(self.dimensions[1:][:layer-1]))
-            #         end_token_small = np.sum(self.dimensions[1:][:layer])
-            #         delta_layer = cp.linalg.norm(delta_us[start_token_small:end_token_small])/cp.linalg.norm(u_vecs[start_token_large:end_token_large])
-            #         delta[layer-1] = delta_layer
-            delta = cp.linalg.norm(delta_us[self.channels*self.image_dim**2:])/cp.linalg.norm(u_vecs[self.channels*self.image_dim**2:])
-            deltas.append(delta)  
-            if verbose and (updates+1)%10 == 0:
-                print(str(updates+1)+" delta "+ str(delta), flush=True)
-        self.update_distr[-1].append(updates)
-        self.max_deltas.append(deltas)
-        return r_vecs, conversion_ticker
+            if (updates+1)%10 == 0:
+                for layer in range(1, self.layers+1):
+                    start_token_large = np.sum(self.dimensions[:layer])
+                    end_token_large = np.sum(self.dimensions[:layer+1])
+                    start_token_small = int(np.sum(self.dimensions[1:][:layer-1]))
+                    end_token_small = np.sum(self.dimensions[1:][:layer])
+                    delta_layer = cp.linalg.norm(delta_u[start_token_small:end_token_small])/cp.linalg.norm(u_vec[start_token_large:end_token_large])
+                    delta[layer-1] = delta_layer  
+        return r_vec, conversion_ticker
     
-    def update_weights(self, r_vecs):
+    def update_weights(self, r_vec):
         self.current_lr = max(self.lr/(1+self.decay*self.epoch), self.lr_floor)
         #r_vec = cp.asnumpy(r_vec)
-        update_matrix = r_vecs@r_vecs.T # Sum of rank one products of r_vecs across images
+        update_matrix = cp.outer(r_vec, r_vec)
         grad_weights = self.weights_update_matrix*(update_matrix - self.weights_adjustment_matrix*self.deep_matrix_weights)
-        self.deep_matrix_weights += self.current_lr*r_vecs.shape[1]*grad_weights
+        self.deep_matrix_weights += self.current_lr*grad_weights
                 
-    def training(self, epochs, images, batch_size=1, max_iters=3000, threshold=1e-4, bleed=False):
-        print("started training")
+    def training(self, epochs, images):
+        print("strated training")
         self.n_images = images.shape[0]
         for epoch in range(epochs):
-            self.update_distr.append([])
-            self.max_deltas.append([])
             img_array = shuffle(images, random_state = epoch)
             epoch_start = time.time()
             sum_ticker = 0
-            for i in tqdm(range(self.n_images//batch_size)):
-                # print(img_array[i:i+1].shape)
-                last_r = rs if bleed else None
-                rs, conversion_ticker = self.neural_dynamics(img_array[i:i+batch_size], max_iters=max_iters, threshold=threshold, r_init=last_r, verbose=False)
+            for img in tqdm(img_array):
+                r, conversion_ticker = self.neural_dynamics(img)
                 sum_ticker += conversion_ticker
-                self.update_weights(rs)
-            if self.n_images%batch_size > 0:
-                rs, conversion_ticker = self.neural_dynamics(img_array[(self.n_images//batch_size):], max_iters=max_iters)
-                sum_ticker += conversion_ticker
-                self.update_weights(rs)
+                self.update_weights(r)
             self.epoch+=1
             epoch_end = time.time()
             epoch_time = epoch_end-epoch_start
-            print("Conversion", float(sum_ticker)/self.n_images)
-            self.conversion_tickers.append(float(sum_ticker)/self.n_images)
+            self.conversion_tickers.append(sum_ticker/self.n_images)
             print(self.deep_matrix_weights[self.deep_matrix_weights != 0].shape)
-            # print(self.deep_matrix_weights.shape, (self.deep_matrix_weights[self.deep_matrix_weights != 0])[:10])
+            print(self.deep_matrix_weights.shape, (self.deep_matrix_weights[self.deep_matrix_weights != 0])[:10])
             print('Epoch: {0}\nTime_Taken: {1}\nConversion: {2}\nCurrent Learning Rate: {3}\n\n'.format(self.epoch, epoch_time, self.conversion_tickers[-1], self.current_lr))
-        return self.conversion_tickers
