@@ -40,6 +40,7 @@ parser.add_argument('--epoch_size', type=int, default=1000, help='random sample 
 parser.add_argument('--max_iters', type=int, default=3000, help='How many iterations (at most) to run the neural dynamics')
 parser.add_argument('--threshold', type=float, default=0.0001, help='Threshold on delta for convergence')
 parser.add_argument('--bleed', type=int, default=0, help='Whether or not to carry state through iterations')
+parser.add_argument('--samples_rs', type=int, default=0, help="Random seed for sample ordering")
 
 # parser.add_argument('--min_iters', type=int, default=100, help='How many iterations (at least) to run the neural dynamics')
 
@@ -96,7 +97,7 @@ print('gamma :', network.gamma)
 print('tanh_factor: ', network.tanh_factors)
 print('Dimensions: ', network.dimensions)
 
-np.random.seed(0)
+np.random.seed(args.samples_rs)
 for i in range(120):
     if i%5 == 0:
         with open(args.run_name + '/update_distr.pkl', 'wb') as f:

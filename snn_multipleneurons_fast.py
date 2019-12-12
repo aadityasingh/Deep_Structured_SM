@@ -309,15 +309,15 @@ class deep_network_GPU(object):
             if verbose and (updates+1)%10 == 0:
                 print(str(updates+1)+" delta "+ str(delta), flush=True)
         self.update_distr[-1].append(updates)
-        self.max_deltas.append(deltas)
+        self.max_deltas[-1].append(deltas)
         return r_vecs, conversion_ticker
     
     def update_weights(self, r_vecs):
         self.current_lr = max(self.lr/(1+self.decay*self.epoch), self.lr_floor)
         #r_vec = cp.asnumpy(r_vec)
         update_matrix = r_vecs@r_vecs.T # Sum of rank one products of r_vecs across images
-        grad_weights = self.weights_update_matrix*(update_matrix - self.weights_adjustment_matrix*self.deep_matrix_weights)
-        self.deep_matrix_weights += self.current_lr*r_vecs.shape[1]*grad_weights
+        grad_weights = self.weights_update_matrix*(update_matrix - r_vecs.shape[1]*self.weights_adjustment_matrix*self.deep_matrix_weights)
+        self.deep_matrix_weights += self.current_lr*grad_weights
                 
     def training(self, epochs, images, batch_size=1, max_iters=3000, threshold=1e-4, bleed=False):
         print("started training")
@@ -333,6 +333,7 @@ class deep_network_GPU(object):
                 # print(img_array[i:i+1].shape)
                 last_r = rs if bleed else None
                 rs, conversion_ticker = self.neural_dynamics(img_array[i:i+batch_size], max_iters=max_iters, threshold=threshold, r_init=last_r, verbose=False)
+                # print(rs.shape)
                 sum_ticker += conversion_ticker
                 self.update_weights(rs)
             if self.n_images%batch_size > 0:
